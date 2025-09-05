@@ -1,5 +1,7 @@
 # MCP Firewall MVP
 
+[![CI](https://github.com/lSAAGl/aegis-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/lSAAGl/aegis-mcp/actions/workflows/ci.yml)
+
 A small FastAPI app that will become the guard/approval layer for MCP actions. Today it ships:
 
 - **HTTP API** (FastAPI):
