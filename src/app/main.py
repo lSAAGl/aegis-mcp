@@ -1,13 +1,15 @@
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from .policy import load_policy
+
+from .approvals import complete_approval, list_approvals
 from .audit import write as audit_write
-from .guard import evaluate as guard_evaluate
-from .approvals import list_approvals, complete_approval
 from .enforcer import enforce as guard_enforce
-from .policy_v2 import validate_policy_input, migrate_v1_to_v2
+from .guard import evaluate as guard_evaluate
+from .policy import load_policy
+from .policy_v2 import migrate_v1_to_v2, validate_policy_input
 
 app = FastAPI(title="MCP Firewall MVP")
 

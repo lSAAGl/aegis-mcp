@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-import sys, yaml, json
+import sys
 from pathlib import Path
+
+import yaml
 
 # Reuse server logic
 from src.app.policy_v2 import migrate_v1_to_v2, validate_policy_input

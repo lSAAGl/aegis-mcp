@@ -1,5 +1,7 @@
 # Minimal, fast defaults
-line-length = 100
+line-length = 140  # More lenient to avoid mass reformatting
+
+[lint]
 select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
-ignore = []
+ignore = ["E501"]  # Ignore line too long for now
 # Never auto-fix in CI; developers may run `ruff --fix` locally

@@ -1,5 +1,6 @@
 import os
-from mcp_server import policy_get, audit_write, require_approval
+
+from mcp_server import audit_write, policy_get, require_approval
 
 
 def test_policy_get_shape():

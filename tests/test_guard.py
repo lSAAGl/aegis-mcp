@@ -1,8 +1,6 @@
 import importlib
-import os
 import json
-import types
-import pytest
+import sys
 
 # We will call: evaluate(tool, amount_cents=None, op=None) -> {allowed, approval_required, reasons: [str]}
 # Semantics under default policy.yml in repo:
@@ -20,7 +18,6 @@ import pytest
 def _reload_guard():
     # Helper to reload guard module after env changes
     if "src.app.guard" in list(sys.modules.keys()):
-        import sys
         sys.modules.pop("src.app.guard", None)
     import src.app.guard as guard  # noqa: F401
     importlib.reload(guard)
@@ -29,7 +26,6 @@ def _reload_guard():
 
 def test_refund_under_cap_allowed(monkeypatch):
     # Uses repo policy.yml by default
-    from src.app import __init__ as _  # ensure package importable
     import src.app.guard as guard  # will fail until implemented
     result = guard.evaluate("refunds.refund", amount_cents=12000, op="refund")
     assert result["allowed"] is True
@@ -71,7 +67,8 @@ def test_deny_list_blocks_without_approval(tmp_path, monkeypatch):
         "max_payment_link_cents": 10_000_000
     }))
     monkeypatch.setenv("POLICY_PATH", str(p))
-    import importlib, sys
+    import importlib
+    import sys
     sys.modules.pop("src.app.guard", None)
     import src.app.guard as guard
     importlib.reload(guard)

@@ -1,5 +1,7 @@
-import os, json
-from mcp_server import policy_get, audit_write, require_approval, guard_check
+import json
+import os
+
+from mcp_server import audit_write, guard_check, policy_get, require_approval
 
 
 def _print(label, obj):

@@ -1,5 +1,6 @@
-import os, io, sys, json, yaml
-from fastapi.testclient import TestClient
+import sys
+
+import yaml
 
 V1_SAMPLE = {
     'max_refund_cents': 15000,

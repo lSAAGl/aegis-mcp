@@ -5,10 +5,14 @@ Examples:
   python tools/cli.py validate examples/policy_v2.yml
   python tools/cli.py migrate policy.yml > policy.v2.yml
 """
-import sys, yaml
+import sys
 from pathlib import Path
-from typing import Dict, Any
-from src.app.policy_v2 import validate_policy_input, migrate_v1_to_v2
+from typing import Any, Dict
+
+import yaml
+
+from src.app.policy_v2 import migrate_v1_to_v2, validate_policy_input
+
 
 def _read_yaml(p: str) -> Dict[str, Any]:
     if p == '-' or p == '/dev/stdin':

@@ -1,6 +1,4 @@
-import os, textwrap
-import json
-import pytest
+import textwrap
 
 # These tests exercise v2 policy evaluation through the existing guard.evaluate()
 # without breaking v1 behavior.

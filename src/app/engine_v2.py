@@ -1,5 +1,5 @@
 import fnmatch
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 # Evaluate a v2 policy (already validated or trusted input)
 # Returns {allowed: bool, approval_required: bool, reasons: [str]}

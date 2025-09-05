@@ -1,7 +1,8 @@
 import fnmatch
 from typing import Optional
-from .policy import load_policy
+
 from .engine_v2 import evaluate_v2 as _evaluate_v2
+from .policy import load_policy
 
 
 def evaluate(tool: str, amount_cents: Optional[int] = None, op: Optional[str] = None) -> dict:

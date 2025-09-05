@@ -1,6 +1,7 @@
 import os
-from fastapi.testclient import TestClient
+
 import pytest
+from fastapi.testclient import TestClient
 
 # Endpoints under test (to be implemented):
 #  - GET /approvals           -> { approvals: [ {dry_run_id, status, ts, approval_id?} ] }

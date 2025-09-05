@@ -2,7 +2,6 @@
 Smoke tests for MCP Firewall application.
 """
 
-import pytest
 from src.app import __version__
 
 

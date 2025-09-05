@@ -1,5 +1,6 @@
-import os, json
-from typing import List, Dict, Optional
+import json
+import os
+from typing import Dict, List, Optional
 
 
 def _approvals_path() -> str:

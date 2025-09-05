@@ -32,7 +32,7 @@ jobs:
         run: pip install ruff mypy pytest pytest-cov types-PyYAML
 
       - name: Lint (ruff)
-        run: ruff .
+        run: ruff check .
 
       - name: Type check (mypy)
         run: mypy src
