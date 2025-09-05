@@ -1,7 +1,7 @@
 import os
-from typing import Optional
+from typing import Optional, Any
 
-import yaml
+import yaml  # type: ignore
 
 DEFAULTS = {
     "max_refund_cents": 0,
@@ -15,11 +15,11 @@ def _coerce_policy(data: dict) -> dict:
     try:
         max_ref = int(data.get("max_refund_cents", DEFAULTS["max_refund_cents"]))
     except Exception:
-        max_ref = DEFAULTS["max_refund_cents"]
+        max_ref = DEFAULTS["max_refund_cents"]  # type: ignore
     try:
         max_pl = int(data.get("max_payment_link_cents", DEFAULTS["max_payment_link_cents"]))
     except Exception:
-        max_pl = DEFAULTS["max_payment_link_cents"]
+        max_pl = DEFAULTS["max_payment_link_cents"]  # type: ignore
     allow = data.get("allow_tools", DEFAULTS["allow_tools"]) or ["*"]
     deny = data.get("deny_tools", DEFAULTS["deny_tools"]) or []
     return {
@@ -33,12 +33,12 @@ def _coerce_policy(data: dict) -> dict:
 
 def load_policy(path: Optional[str] = None) -> dict:
     """Load YAML policy from disk; return safe, typed dict with defaults if missing."""
-    path = path or os.environ.get("POLICY_PATH", "policy.yml")
-    if not os.path.exists(path):
-        return _coerce_policy({"_path": path})
-    with open(path, "r") as f:
-        raw = yaml.safe_load(f) or {}
-        raw["_path"] = path
+    policy_path: str = path or os.environ.get("POLICY_PATH", "policy.yml") or "policy.yml"
+    if not os.path.exists(policy_path):
+        return _coerce_policy({"_path": policy_path})
+    with open(policy_path, "r") as f:
+        raw: Any = yaml.safe_load(f) or {}
+        raw["_path"] = policy_path
     
     # If this is a v2 policy, return it as-is (don't coerce to v1)
     if isinstance(raw, dict) and raw.get('version') == 2:
