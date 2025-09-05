@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/app/__init__.py
+src/app/audit.py
+src/app/main.py
+src/app/policy.py
+src/mcp_firewall.egg-info/PKG-INFO
+src/mcp_firewall.egg-info/SOURCES.txt
+src/mcp_firewall.egg-info/dependency_links.txt
+src/mcp_firewall.egg-info/requires.txt
+src/mcp_firewall.egg-info/top_level.txt
+tests/test_health.py
+tests/test_mcp_tools.py
+tests/test_smoke.py

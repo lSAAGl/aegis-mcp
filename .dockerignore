@@ -1,0 +1,19 @@
+# Local/virtual envs
+.venv
+.venv311
+# Caches & junk
+__pycache__
+*.pyc
+*.pyo
+*.DS_Store
+# VCS & IDE
+.git
+.github
+.vscode
+.idea
+# Local artifacts
+*.log
+approvals.log
+audit.log
+# Tests are excluded from image by default (CI runs them)
+tests/

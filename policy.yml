@@ -1,0 +1,6 @@
+max_refund_cents: 15000      # $150.00 cap
+max_payment_link_cents: 25000  # $250.00 cap
+allow_tools:
+  - "refunds.*"
+  - "payment_links.create"
+deny_tools: []

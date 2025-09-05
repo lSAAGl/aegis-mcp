@@ -1,0 +1,16 @@
+version: 2
+rules:
+  - match: "refunds.*"
+    decision: allow
+    cap_cents: 15000
+    ops: ["refund"]
+    reason: "Refunds ≤ $150 auto-approve"
+
+  - match: "payment_links.create"
+    decision: allow
+    cap_cents: 25000
+    reason: "Payment links ≤ $250 auto-approve"
+
+  - match: "*"
+    decision: review
+    reason: "Unlisted tools require approval"

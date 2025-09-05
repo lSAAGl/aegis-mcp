@@ -1,0 +1,165 @@
+Metadata-Version: 2.4
+Name: mcp-firewall
+Version: 0.1.0
+Summary: MCP Firewall MVP - FastAPI server for MCP traffic filtering
+Author-email: Your Name <your.email@example.com>
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.104.0
+Requires-Dist: uvicorn[standard]>=0.24.0
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: test
+Requires-Dist: pytest>=7.0.0; extra == "test"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "test"
+Requires-Dist: httpx>=0.24.0; extra == "test"
+
+# MCP Firewall MVP
+
+A small FastAPI app that will become the guard/approval layer for MCP actions. Today it ships:
+
+- **HTTP API** (FastAPI):
+  - `GET /health` → `{ "status": "ok" }`
+  - `GET /policy` → returns the active policy (from `policy.yml` or defaults)
+  - `POST /audit` → appends a JSON line to `audit.log` and returns a `trace_id`
+- **MCP stdio server** (FastMCP): exposes guard tools
+  - `policy_get()` → current policy dict
+  - `audit_write(action, tool?, ok?, note?)` → writes to `audit.log`
+  - `require_approval(dry_run_id, approval_code?)` → two-phase approval
+
+## Quick start: HTTP API (FastAPI)
+
+```bash
+# Create and activate a virtual environment (Python 3.9+ is fine for HTTP API)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install
+python -m pip install --upgrade pip
+pip install -e .
+pip install fastapi uvicorn pyyaml pytest httpx
+
+# Run the server
+uvicorn src.app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Test it:
+```bash
+curl -s http://127.0.0.1:8000/health
+curl -s http://127.0.0.1:8000/policy | jq .
+curl -s -X POST http://127.0.0.1:8000/audit \
+  -H 'content-type: application/json' \
+  -d '{"action":"demo","tool":"curl","ok":true,"note":"readme"}'
+
+tail -n 3 audit.log
+```
+
+## MCP stdio server (FastMCP)
+
+> Requires **Python 3.11+**. This repo uses a separate env `.venv311` for MCP while keeping the HTTP API in `.venv`.
+
+```bash
+# Create and activate Python 3.11 env
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+
+# Install deps (includes FastMCP)
+pip install --upgrade pip
+pip install -e .
+pip install fastmcp fastapi uvicorn pyyaml pytest httpx
+
+# Start the MCP stdio server
+./run_mcp.sh
+```
+You should see a FastMCP banner showing:
+- Server name: `mcp-firewall`
+- Transport: `STDIO`
+
+### Programmatic smoke test (no MCP SDK client needed)
+```bash
+# With .venv311 active
+python smoke_client_direct.py
+
+tail -n 5 audit.log
+tail -n 5 approvals.log
+```
+Expected:
+- `TOOLS ["policy_get","audit_write","require_approval"]`
+- `POLICY_GET` shows keys: `max_refund_cents`, `max_payment_link_cents`, `allow_tools`, `deny_tools`.
+- `AUDIT_WRITE` returns `{ok:true, trace_id:"...", path:"audit.log"}` and `audit.log` grows by one line.
+- `APPROVAL_1` → `status: "pending"`, then `APPROVAL_2` → `status: "approved"`.
+
+### Use with Cursor (optional)
+1) **Settings → MCP Servers → Add Local Server**  
+2) **Name:** `mcp-firewall`  
+3) **Command:** `/bin/bash`  
+4) **Args:** `-lc`, `cd '<project_path>' && ./run_mcp.sh`  
+5) **Working Dir:** your project root  
+Then run tools in MCP Inspector:
+- `policy_get`
+- `audit_write` with `{action:"cursor", tool:"inspector", ok:true, note:"readme"}`
+- `require_approval` twice (first pending, then with `approval_code:"123456"`)
+
+## Tests
+
+```bash
+# HTTP + MCP unit tests (either env works, prefer .venv311)
+pytest -q
+# If imports fail, try:
+PYTHONPATH=. pytest -q
+```
+
+## Policy file
+
+Edit `policy.yml`:
+```yaml
+max_refund_cents: 15000
+max_payment_link_cents: 25000
+allow_tools:
+  - "refunds.*"
+  - "payment_links.create"
+deny_tools: []
+```
+Optional env vars:
+- `POLICY_PATH` → path to policy file (default `policy.yml`)
+- `AUDIT_PATH` → path to audit log (default `audit.log`)
+- `APPROVAL_CODE` → override approval code for `require_approval` (default `123456`)
+
+## Troubleshooting
+- **Port already in use (HTTP API)**: run on another port
+  ```bash
+  uvicorn src.app.main:app --reload --host 127.0.0.1 --port 8001
+  ```
+- **ImportError for `src.app.main` in tests**: ensure venv is active and run `pip install -e .`, or run tests with `PYTHONPATH=.`.
+- **`policy.yml` not found**: app falls back to safe defaults; set `POLICY_PATH` if your file lives elsewhere.
+- **No audit entries**: confirm POST body is JSON; check `AUDIT_PATH`.
+
+## Project layout
+```
+mcp-firewall/
+├─ src/app/
+│  ├─ __init__.py
+│  ├─ main.py
+│  ├─ policy.py
+│  └─ audit.py
+├─ mcp_server.py
+├─ run_mcp.sh
+├─ smoke_client_direct.py
+├─ tests/
+│  ├─ test_smoke.py
+│  ├─ test_health.py
+│  └─ test_mcp_tools.py
+├─ policy.yml
+├─ audit.log           # created after first POST /audit or audit_write()
+├─ approvals.log       # created by require_approval()
+├─ pyproject.toml
+├─ Makefile            # HTTP API helpers (uses .venv)
+└─ README.md
+```
