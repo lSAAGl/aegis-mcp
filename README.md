@@ -1,216 +1,375 @@
-# MCP Firewall MVP
+# AegisMCP — MCP Firewall
 
 [![CI](https://github.com/lSAAGl/aegis-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/lSAAGl/aegis-mcp/actions/workflows/ci.yml)
 
-A small FastAPI app that will become the guard/approval layer for MCP actions. Today it ships:
+**Open-source MCP Firewall**: Policy rules, audit logs, approvals workflow, and Web UI for AI/MCP tool-calling security.
 
-- **HTTP API** (FastAPI):
-  - `GET /health` → `{ "status": "ok" }`
-  - `GET /policy` → returns the active policy (from `policy.yml` or defaults)
-  - `POST /audit` → appends a JSON line to `audit.log` and returns a `trace_id`
-  - `POST /guard/check` → policy decision for a prospective tool call (see examples)
-- **MCP stdio server** (FastMCP): exposes guard tools
-  - `policy_get()` → current policy dict
-  - `audit_write(action, tool?, ok?, note?)` → writes to `audit.log`
-  - `require_approval(dry_run_id, approval_code?)` → two-phase approval
-  - `guard_check(tool, amount_cents?, op?)` → same policy decision as HTTP endpoint
+AegisMCP provides a comprehensive guard and approval layer for MCP (Model Context Protocol) actions, featuring both HTTP API and MCP stdio server protocols, policy enforcement, approval workflows, audit logging, and production-ready packaging.
 
-## Quick start: HTTP API (FastAPI)
+## 🚀 Features
 
+### Core Components
+- **🛡️ Policy Engine**: Rule-based allow/deny decisions with amount caps and pattern matching
+- **📋 Audit Logging**: Complete trail of all tool calls and decisions in JSONL format  
+- **✅ Approval Workflow**: Two-phase approval system with codes and Web UI
+- **🌐 HTTP API**: 11 REST endpoints for policy, audit, guard, approvals, and enforcement
+- **🔧 MCP Server**: FastMCP stdio server exposing 5 MCP tools for integration
+- **📊 Web Interface**: HTML approval management interface
+- **🐳 Docker Ready**: Multi-stage builds with optimized caching
+- **⚡ CI/CD**: GitHub Actions with ruff, mypy, pytest, and coverage
+
+### Policy System
+- **v1 & v2 DSL**: Flexible policy configuration with migration support
+- **Pattern Matching**: fnmatch-style tool name patterns (`refunds.*`, `users.export`)
+- **Amount Caps**: Per-operation spending limits with escalation
+- **Rule Evaluation**: Top-down, first-match-wins logic
+- **Validation**: Schema validation with helpful error messages
+
+## 🏃‍♂️ Quick Start
+
+### HTTP API (Python 3.9+)
 ```bash
-# Create and activate a virtual environment (Python 3.9+ is fine for HTTP API)
-python3 -m venv .venv
-source .venv/bin/activate
+# Setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e . && pip install fastapi uvicorn pyyaml httpx
 
-# Install
-python -m pip install --upgrade pip
-pip install -e .
-pip install fastapi uvicorn pyyaml pytest httpx
+# Run server
+uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Run the server
-uvicorn src.app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Test it:
-```bash
-curl -s http://127.0.0.1:8000/health
-curl -s http://127.0.0.1:8000/policy | jq .
-
-# Write an audit entry (creates/updates audit.log)
-curl -s -X POST http://127.0.0.1:8000/audit \
-  -H 'content-type: application/json' \
-  -d '{"action":"demo","tool":"curl","ok":true,"note":"readme"}'
-
-tail -n 3 audit.log
-```
-
-### Guard check via HTTP
-The policy rules engine evaluates allow/deny and amount caps from `policy.yml`.
-
-```bash
-# Allowed: refund under cap (default cap 15000)
-curl -s -X POST http://127.0.0.1:8000/guard/check \
+# Test endpoints
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/policy | jq .
+curl -s -X POST http://localhost:8000/guard/check \
   -H 'content-type: application/json' \
   -d '{"tool":"refunds.refund","amount_cents":12000,"op":"refund"}' | jq .
-
-# Requires approval: refund over cap
-curl -s -X POST http://127.0.0.1:8000/guard/check \
-  -H 'content-type: application/json' \
-  -d '{"tool":"refunds.refund","amount_cents":20000,"op":"refund"}' | jq .
-
-# Requires approval: tool not in allow list
-curl -s -X POST http://127.0.0.1:8000/guard/check \
-  -H 'content-type: application/json' \
-  -d '{"tool":"users.export"}' | jq .
 ```
 
-## MCP stdio server (FastMCP)
-
-> Requires **Python 3.11+**. This repo uses a separate env `.venv311` for MCP while keeping the HTTP API in `.venv`.
-
+### MCP Server (Python 3.11+)
 ```bash
-# Create and activate Python 3.11 env
-python3.11 -m venv .venv311
-source .venv311/bin/activate
+# Setup Python 3.11 environment  
+python3.11 -m venv .venv311 && source .venv311/bin/activate
+pip install -e . && pip install fastmcp fastapi uvicorn pyyaml httpx
 
-# Install deps (includes FastMCP)
-pip install --upgrade pip
-pip install -e .
-pip install fastmcp fastapi uvicorn pyyaml pytest httpx
-
-# Start the MCP stdio server
+# Run MCP stdio server
 ./run_mcp.sh
-```
-You should see a FastMCP banner showing:
-- Server name: `mcp-firewall`
-- Transport: `STDIO`
 
-### Programmatic smoke test (no MCP SDK client needed)
-```bash
-# With .venv311 active
+# Test with direct client
 python smoke_client_direct.py
-
-tail -n 5 audit.log
-tail -n 5 approvals.log
-```
-Expected:
-- `TOOLS ["policy_get","audit_write","require_approval","guard_check"]`
-- `POLICY_GET` shows keys: `max_refund_cents`, `max_payment_link_cents`, `allow_tools`, `deny_tools`.
-- `AUDIT_WRITE` returns `{ok:true, trace_id:"...", path:"audit.log"}` and `audit.log` grows by one line.
-- `APPROVAL_1` → `status: "pending"`, then `APPROVAL_2` → `status: "approved"`.
-- `GUARD_refund_under` → allowed; `GUARD_refund_over` → approval_required with a cap reason; `GUARD_users_export` → approval_required with allow-list reason.
-
-### Use with Cursor (optional)
-1) **Settings → MCP Servers → Add Local Server**  
-2) **Name:** `mcp-firewall`  
-3) **Command:** `/bin/bash`  
-4) **Args:** `-lc`, `cd '<project_path>' && ./run_mcp.sh`  
-5) **Working Dir:** your project root  
-Then run tools in MCP Inspector:
-- `policy_get`
-- `audit_write` with `{action:"cursor", tool:"inspector", ok:true, note:"readme"}`
-- `require_approval` twice (first pending, then with `approval_code:"123456"`)
-- `guard_check` with a few scenarios (see HTTP examples above)
-
-### Approvals Web UI
-
-Start the HTTP server, create a pending approval, and open the page:
-
-```bash
-# HTTP API
-make run
-
-# In another terminal (Python 3.11 env already set up via `make mcp-install`)
-make approvals-demo
-
-# Visit the UI:
-make approvals-open
-# -> http://127.0.0.1:8000/ui/approvals
 ```
 
-From the page, paste the approval code (default `123456`) and click **Complete**.
-You can also complete via HTTP:
-
+### Docker
 ```bash
-curl -s -X POST http://127.0.0.1:8000/approvals/complete \
-  -H 'content-type: application/json' \
-  -d '{"dry_run_id":"ui-demo","approval_code":"123456"}' | jq .
-```
-
-### Docker (quick start)
-
-```bash
-# Build the image
+# Build and run
 make docker-build
-
-# Run the HTTP API on http://127.0.0.1:8000 (mount your policy.yml if desired)
 make docker-run
 
-# Try it
-curl -s http://127.0.0.1:8000/health
-curl -s http://127.0.0.1:8000/policy | jq .
-
-# Stop container
-make docker-stop
+# Test
+curl -s http://localhost:8000/health
 ```
 
-CI runs ruff + mypy + pytest on pushes/PRs. See `.github/workflows/ci.yml`.
+## 📚 API Documentation
 
-## Tests
+### HTTP Endpoints
 
-```bash
-# HTTP + MCP unit tests (either env works, prefer .venv311)
-pytest -q
-# If imports fail, try:
-PYTHONPATH=. pytest -q
-```
+#### Core Endpoints
+- `GET /health` - Health check
+- `GET /policy` - Current policy configuration  
+- `POST /audit` - Write audit entry
+- `POST /guard/check` - Policy evaluation for tool calls
 
-## Policy file
+#### Policy Management  
+- `GET /policy/validate` - Validate policy configuration
+- `POST /policy/migrate` - Migrate v1 to v2 policy format
 
-Edit `policy.yml`:
+#### Enforcement
+- `POST /guard/enforce` - Unified enforcement (policy + audit + approval)
+
+#### Approvals
+- `GET /approvals` - List pending/completed approvals
+- `POST /approvals/complete` - Complete approval with code
+- `GET /ui/approvals` - Web interface for approval management
+
+### MCP Tools
+- `policy_get()` - Get current policy
+- `audit_write(action, tool?, ok?, note?)` - Write audit entry
+- `require_approval(dry_run_id, approval_code?)` - Two-phase approval
+- `guard_check(tool, amount_cents?, op?)` - Policy evaluation  
+- `firewall_enforce(tool, amount_cents?, op?, meta?)` - Unified enforcement
+
+## 🛡️ Policy Configuration
+
+### Basic Policy (v1)
 ```yaml
-max_refund_cents: 15000
-max_payment_link_cents: 25000
+# policy.yml
+max_refund_cents: 15000      # $150.00 cap
+max_payment_link_cents: 25000  # $250.00 cap
 allow_tools:
   - "refunds.*"
   - "payment_links.create"
 deny_tools: []
 ```
-Optional env vars:
-- `POLICY_PATH` → path to policy file (default `policy.yml`)
-- `AUDIT_PATH` → path to audit log (default `audit.log`)
-- `APPROVAL_CODE` → override approval code for `require_approval` (default `123456`)
 
-## Troubleshooting
-- **Port already in use (HTTP API)**: run on another port
-  ```bash
-  uvicorn src.app.main:app --reload --host 127.0.0.1 --port 8001
-  ```
-- **ImportError for `src.app.main` in tests**: ensure venv is active and run `pip install -e .`, or run tests with `PYTHONPATH=.`.
-- **`policy.yml` not found**: app falls back to safe defaults; set `POLICY_PATH` if your file lives elsewhere.
-- **No audit entries**: confirm POST body is JSON; check `AUDIT_PATH`.
+### Advanced Policy (v2 DSL)
+```yaml
+# examples/policy_v2.yml
+version: 2
+rules:
+  - match: "refunds.*"
+    decision: allow
+    cap_cents: 15000
+    ops: ["refund"]
+    reason: "Auto-approved refunds under $150"
+    
+  - match: "payment_links.create"
+    decision: allow
+    cap_cents: 25000
+    reason: "Auto-approved payment links under $250"
+    
+  - match: "users.export"
+    decision: deny
+    reason: "User export forbidden"
+    
+  - match: "*"
+    decision: review
+    reason: "Default: requires approval"
+```
 
-## Project layout
+## 🔄 Approval Workflow
+
+### Two-Phase Approval
+```bash
+# 1. Create pending approval
+curl -X POST http://localhost:8000/guard/enforce \
+  -H 'content-type: application/json' \
+  -d '{"tool":"refunds.refund","amount_cents":20000,"op":"refund"}'
+
+# Response includes approval_id for tracking
+
+# 2. Complete via Web UI or API
+curl -X POST http://localhost:8000/approvals/complete \
+  -H 'content-type: application/json' \
+  -d '{"dry_run_id":"APPROVAL_ID","approval_code":"123456"}'
 ```
-mcp-firewall/
-├─ src/app/
-│  ├─ __init__.py
-│  ├─ main.py
-│  ├─ policy.py
-│  ├─ audit.py
-│  └─ guard.py
-├─ mcp_server.py
-├─ run_mcp.sh
-├─ smoke_client_direct.py
-├─ tests/
-│  ├─ test_smoke.py
-│  ├─ test_health.py
-│  ├─ test_mcp_tools.py
-│  └─ test_guard.py
-├─ policy.yml
-├─ audit.log           # created after first POST /audit or audit_write()
-├─ approvals.log       # created by require_approval()
-├─ pyproject.toml
-├─ Makefile            # HTTP & MCP helpers (.venv / .venv311)
-└─ README.md
+
+### Web Interface
+```bash
+# Start server and create demo approval
+make run
+make approvals-demo
+
+# Open approval interface  
+open http://localhost:8000/ui/approvals
 ```
+
+## 🧪 Development
+
+### Testing
+```bash
+# Run all tests
+pytest -q
+
+# With coverage
+pytest --cov=src --cov-report=term-missing
+
+# Specific test suites
+pytest tests/test_guard_v2.py -v
+pytest tests/test_enforcer.py -v
+```
+
+### Code Quality
+```bash
+# Linting
+ruff check .
+ruff format .
+
+# Type checking
+mypy src
+
+# Policy validation
+python tools/cli.py validate policy.yml
+```
+
+### Policy Migration
+```bash
+# Migrate v1 to v2 policy
+python tools/cli.py migrate policy.yml > policy_v2.yml
+
+# Validate v2 policy
+python tools/cli.py validate policy_v2.yml
+```
+
+## 🏗️ Architecture
+
+### Dual Environment Setup
+- **HTTP API**: Python 3.9+ (`.venv`) - FastAPI, basic functionality
+- **MCP Server**: Python 3.11+ (`.venv311`) - FastMCP, full MCP protocol
+
+### Key Components
+```
+src/app/
+├── main.py           # FastAPI HTTP server (11 endpoints)
+├── enforcer.py       # Unified enforcement logic  
+├── policy_v2.py      # v2 policy schema & validation
+├── engine_v2.py      # v2 rules evaluation engine
+├── approvals.py      # Approval workflow management
+├── guard.py          # v1 policy evaluation (legacy)
+├── policy.py         # Policy loading & v1/v2 handling
+└── audit.py          # Audit logging utilities
+
+mcp_server.py         # FastMCP stdio server (5 tools)
+tools/cli.py         # CLI utilities (validate/migrate)
+```
+
+### Data Flow
+1. **Tool Request** → Policy Engine → Allow/Review/Deny
+2. **If Review** → Create Approval → Web UI → Complete/Deny  
+3. **All Actions** → Audit Log → Compliance Trail
+
+## 📊 Monitoring & Compliance
+
+### Audit Trail
+```bash
+# View recent activity
+tail -f audit.log
+
+# Search for specific actions
+grep "refund" audit.log | jq .
+
+# Filter by status
+jq 'select(.ok == false)' audit.log
+```
+
+### Approval Tracking
+```bash
+# View pending approvals
+tail -f approvals.log | jq 'select(.status == "pending")'
+
+# Approval completion rates
+jq -r '.status' approvals.log | sort | uniq -c
+```
+
+## 🐳 Production Deployment
+
+### Docker
+```dockerfile
+FROM python:3.11-slim
+# Optimized multi-stage build with layer caching
+# Default: HTTP API on port 8000
+# Override: CMD to run MCP stdio server
+```
+
+### Environment Variables
+```bash
+# Policy & data paths
+POLICY_PATH=/app/config/policy.yml
+AUDIT_PATH=/app/logs/audit.log  
+APPROVALS_PATH=/app/logs/approvals.log
+
+# Security
+APPROVAL_CODE=your-secure-code-here
+
+# Monitoring
+LOG_LEVEL=INFO
+```
+
+## 🔧 CLI Tools
+
+### Policy Management
+```bash
+# Validate policy syntax
+./tools/cli.py validate policy.yml
+
+# Migrate v1 → v2
+./tools/cli.py migrate policy.yml > policy_v2.yml
+
+# Validate migrated policy  
+./tools/cli.py validate policy_v2.yml
+```
+
+### Migration Helper
+```bash
+# Automated migration with backup
+python tools/policy_migrate.py policy.yml --backup
+```
+
+## 🚀 CI/CD
+
+### GitHub Actions Workflow
+- **Python 3.11** with pip caching
+- **Linting**: ruff with auto-fix
+- **Type Checking**: mypy with strict mode
+- **Testing**: pytest with coverage reporting
+- **Dependency Updates**: Dependabot (weekly)
+
+### Quality Gates
+```yaml
+# .github/workflows/ci.yml
+- Ruff linting (E, F, I rules)
+- MyPy type checking (strict)  
+- Pytest (all tests must pass)
+- Coverage reporting (terminal)
+```
+
+## 📈 Roadmap
+
+### Completed ✅
+- [x] HTTP API with 11 endpoints
+- [x] MCP stdio server with 5 tools  
+- [x] Policy engine (v1 & v2 DSL)
+- [x] Approval workflow with Web UI
+- [x] Unified enforcement layer
+- [x] Audit logging & compliance
+- [x] Docker packaging & CI/CD
+- [x] Migration tools & validation
+
+### Future Enhancements 🔄
+- [ ] Web dashboard for policy management
+- [ ] Webhook notifications for approvals  
+- [ ] RBAC (Role-Based Access Control)
+- [ ] Metrics & analytics dashboard
+- [ ] Integration with external approval systems
+- [ ] Advanced rule conditions (time, user context)
+
+## 🤝 Contributing
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** changes (`git commit -m 'Add amazing feature'`)  
+4. **Push** to branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Development Setup
+```bash
+# Clone and setup
+git clone https://github.com/lSAAGl/aegis-mcp.git
+cd aegis-mcp
+
+# HTTP environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e . && pip install -r requirements-dev.txt
+
+# MCP environment  
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+pip install -e . && pip install fastmcp
+
+# Run tests
+pytest -q
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **FastAPI** - Modern Python web framework
+- **FastMCP** - MCP server implementation
+- **Pydantic** - Data validation and settings
+- **Ruff** - Fast Python linter
+- **pytest** - Testing framework
+
+---
+
+**AegisMCP** - Secure your AI tool calls with confidence! 🛡️✨
